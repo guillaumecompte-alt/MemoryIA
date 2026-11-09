@@ -193,6 +193,38 @@
       linear-gradient(145deg, #6d5dfc, #8b5cf6 55%, #a855f7);
     border: 1.6cqi solid rgba(255,255,255,.85);
   }
+  /* Dos vert (mots) et dos jaune (définitions) */
+  .back.word {
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,.22) 0 22%, transparent 23%),
+      repeating-linear-gradient(45deg, rgba(255,255,255,.12) 0 6px, transparent 6px 14px),
+      linear-gradient(145deg, #34d399, #16a34a 60%, #15803d);
+  }
+  .back.def {
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,.25) 0 22%, transparent 23%),
+      repeating-linear-gradient(45deg, rgba(255,255,255,.14) 0 6px, transparent 6px 14px),
+      linear-gradient(145deg, #fde047, #facc15 55%, #eab308);
+  }
+  .back.def::after { color: #7a5a00; text-shadow: 0 1.2cqi 0 rgba(255,255,255,.35); }
+
+  /* Refus : 2e carte de la même couleur */
+  .card.nope .inner { animation: nope .4s ease; }
+  @keyframes nope {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6%) rotateZ(-3deg); }
+    75% { transform: translateX(6%) rotateZ(3deg); }
+  }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 18px; z-index: 16;
+    transform: translate(-50%, 20px); opacity: 0;
+    background: rgba(255,255,255,.95); color: var(--ink);
+    padding: 10px 22px; border-radius: 999px; font-weight: 600;
+    font-size: clamp(1rem, 2vw, 1.4rem); pointer-events: none;
+    transition: opacity .25s, transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .hint.show { opacity: 1; transform: translate(-50%, 0); }
   .back::after {
     content: "?";
     font-size: 30cqi;
@@ -401,11 +433,12 @@
 </div>
 
 <div class="turn-banner" id="turnBanner"></div>
+<div class="hint" id="hint"></div>
 
 <!-- Écran d'accueil -->
 <div class="overlay" id="start">
   <h2>Memory <span style="color:var(--gold)">IA</span></h2>
-  <p>Retournez deux cartes : un <b style="color:var(--green)">mot</b> et sa <b style="color:var(--yellow)">définition</b>.
+  <p>Retournez une carte <b style="color:var(--green)">verte</b> et une carte <b style="color:var(--yellow)">jaune</b> : un <b style="color:var(--green)">mot</b> et sa <b style="color:var(--yellow)">définition</b>.
      Si elles vont ensemble, vous marquez 1 point et les cartes disparaissent !</p>
   <div class="demo-cards">
     <div class="w">robot</div>
@@ -506,6 +539,9 @@ const Sound = {
         this.tone(330, 0, .18, "square", .07, 260);
         this.tone(250, .18, .3, "square", .07, 180);
         break;
+      case "nope":
+        this.tone(200, 0, .12, "triangle", .15, 150);
+        break;
       case "turn":
         this.tone(660, 0, .1, "sine", .12);
         this.tone(880, .08, .14, "sine", .12);
@@ -556,10 +592,11 @@ function buildBoard() {
     const el = document.createElement("button");
     el.className = "card";
     el.dataset.pair = c.id;
+    el.dataset.kind = c.kind;
     el.setAttribute("aria-label", "Carte cachée");
     el.innerHTML = `
       <div class="inner">
-        <div class="face back"></div>
+        <div class="face back ${c.kind}"></div>
         <div class="face front ${c.kind}">${c.text}</div>
       </div>`;
     el.addEventListener("click", () => onCardClick(el));
@@ -609,6 +646,14 @@ function showTurnBanner() {
 function onCardClick(card) {
   if (state.lock || card.classList.contains("flipped") || card.classList.contains("matched")) return;
 
+  // La 2e carte doit être de l'autre couleur
+  if (state.first && state.first.dataset.kind === card.dataset.kind) {
+    card.classList.remove("nope"); void card.offsetWidth; card.classList.add("nope");
+    Sound.play("nope");
+    showHint(card.dataset.kind === "word" ? "Retourne une carte jaune !" : "Retourne une carte verte !");
+    return;
+  }
+
   card.classList.add("flipped");
   card.setAttribute("aria-label", card.querySelector(".front").textContent);
   Sound.play("flip");
@@ -657,6 +702,15 @@ function handleMiss() {
     resetPick();
     setTimeout(() => { nextPlayer(); state.lock = false; }, 450);
   }, 1300);
+}
+
+let hintTimer;
+function showHint(text) {
+  const h = document.getElementById("hint");
+  h.textContent = text;
+  h.classList.add("show");
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => h.classList.remove("show"), 1600);
 }
 
 function resetPick() { state.first = state.second = null; }
